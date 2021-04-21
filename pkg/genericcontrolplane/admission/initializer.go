@@ -19,7 +19,7 @@ package admission
 import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apiserver/pkg/admission"
-	quota "k8s.io/kubernetes/pkg/quota/v1"
+	quota "k8s.io/apiserver/pkg/quota/v1"
 )
 
 // TODO add a `WantsToRun` which takes a stopCh.  Might make it generic.

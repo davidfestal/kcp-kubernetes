@@ -1,4 +1,4 @@
-package controlplane
+package genericcontrolplane
 
 import (
 	"errors"

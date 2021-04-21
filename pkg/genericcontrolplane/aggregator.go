@@ -17,7 +17,7 @@ limitations under the License.
 // Package app does all of the work necessary to create a Kubernetes
 // APIServer by binding together the API, master and APIServer infrastructure.
 // It can be configured and called directly or via the hyperkube framework.
-package controlplane
+package genericcontrolplane
 
 import (
 	"fmt"
@@ -50,8 +50,8 @@ import (
 	apiregistrationclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/typed/apiregistration/v1"
 	informers "k8s.io/kube-aggregator/pkg/client/informers/externalversions/apiregistration/v1"
 	"k8s.io/kube-aggregator/pkg/controllers/autoregister"
-	"k8s.io/kubernetes/pkg/controlplane/options"
-	"k8s.io/kubernetes/pkg/master/controller/crdregistration"
+	"k8s.io/kubernetes/pkg/genericcontrolplane/options"
+	"k8s.io/kubernetes/pkg/controlplane/controller/crdregistration"
 )
 
 func createAggregatorConfig(
@@ -183,7 +183,10 @@ func makeAPIService(gv schema.GroupVersion) *v1.APIService {
 		return nil
 	}
 	return &v1.APIService{
-		ObjectMeta: metav1.ObjectMeta{Name: gv.Version + "." + gv.Group},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        gv.Version + "." + gv.Group,
+			ClusterName: RootClusterName,
+		},
 		Spec: v1.APIServiceSpec{
 			Group:                gv.Group,
 			Version:              gv.Version,
@@ -271,7 +274,7 @@ var apiVersionPriorities = map[schema.GroupVersion]priority{
 func apiServicesToRegister(delegateAPIServer genericapiserver.DelegationTarget, registration autoregister.AutoAPIServiceRegistration) []*v1.APIService {
 	apiServices := []*v1.APIService{}
 
-	for _, curr := range delegateAPIServer.ListedPaths() {
+	for _, curr := range delegateAPIServer.ListedPaths("") {
 		if curr == "/api/v1" {
 			apiService := makeAPIService(schema.GroupVersion{Group: "", Version: "v1"})
 			registration.AddAPIServiceToSyncOnStart(apiService)

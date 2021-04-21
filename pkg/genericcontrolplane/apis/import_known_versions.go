@@ -17,5 +17,5 @@ limitations under the License.
 package apis
 
 import (
-	_ "k8s.io/kubernetes/pkg/controlplane/apis/install"
+	_ "k8s.io/kubernetes/pkg/genericcontrolplane/apis/install"
 )

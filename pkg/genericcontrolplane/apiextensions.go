@@ -17,7 +17,7 @@ limitations under the License.
 // Package app does all of the work necessary to create a Kubernetes
 // APIServer by binding together the API, master and APIServer infrastructure.
 // It can be configured and called directly or via the hyperkube framework.
-package controlplane
+package genericcontrolplane
 
 import (
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -34,7 +34,7 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/apiserver/pkg/util/webhook"
 	kubeexternalinformers "k8s.io/client-go/informers"
-	"k8s.io/kubernetes/pkg/controlplane/options"
+	"k8s.io/kubernetes/pkg/genericcontrolplane/options"
 )
 
 func createAPIExtensionsConfig(
