@@ -442,8 +442,8 @@ func (wc *watchChan) prepareObjs(e *event) (curObj runtime.Object, oldObj runtim
 		if err != nil {
 			return nil, nil, err
 		}
-		clusterName := ""
-		if wc.clusterName == "*" {
+		clusterName := wc.clusterName
+		if clusterName == "*" {
 			sub := strings.TrimPrefix(e.key, wc.key)
 			if i := strings.Index(sub, "/"); i != -1 {
 				sub = sub[:i]
@@ -468,6 +468,8 @@ func (wc *watchChan) prepareObjs(e *event) (curObj runtime.Object, oldObj runtim
 			} else {
 				klog.Infof("NO SUB: %T %s", curObj, clusterName)
 			}
+		} else {
+			klog.Errorf("Cluster should not be unknown")
 		}
 	}
 	// We need to decode prevValue, only if this is deletion event or
@@ -486,8 +488,8 @@ func (wc *watchChan) prepareObjs(e *event) (curObj runtime.Object, oldObj runtim
 		if err != nil {
 			return nil, nil, err
 		}
-		clusterName := ""
-		if wc.clusterName == "*" {
+		clusterName := wc.clusterName
+		if clusterName == "*" {
 			sub := strings.TrimPrefix(e.key, wc.key)
 			if i := strings.Index(sub, "/"); i != -1 {
 				sub = sub[:i]
@@ -512,8 +514,9 @@ func (wc *watchChan) prepareObjs(e *event) (curObj runtime.Object, oldObj runtim
 			} else {
 				klog.Infof("NO SUB: %T %s", oldObj, clusterName)
 			}
+		} else {
+			klog.Errorf("Cluster should not be unknown")
 		}
-
 	}
 	return curObj, oldObj, nil
 }
