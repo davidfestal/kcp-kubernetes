@@ -326,9 +326,18 @@ func (r *crdHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 	} else {
+		getCRDInCluster := func(clusterName string) (*apiextensionsv1.CustomResourceDefinition, error) {
+			crdKey := clusters.ToClusterAwareKey(clusterName, crdName)
+			return r.crdLister.Get(crdKey)
+		}
 		crdClusterName = cluster.Name
-		crdKey := clusters.ToClusterAwareKey(crdClusterName, crdName)
-		crd, err = r.crdLister.Get(crdKey)
+		crd, err = getCRDInCluster(crdClusterName)
+		if err != nil && errors.IsNotFound(err) && len(cluster.Parents) > 0 {
+			crd, err = getCRDInCluster(cluster.Parents[0])
+			if err == nil && crd != nil {
+				crdClusterName = cluster.Parents[0]
+			}
+		}
 	}
 	if apierrors.IsNotFound(err) {
 		if !r.hasSynced() {
