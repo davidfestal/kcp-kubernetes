@@ -49,7 +49,9 @@ import (
 	"k8s.io/apiextensions-apiserver/pkg/registry/customresource/tableconvertor"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -279,16 +281,59 @@ func (r *crdHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		crdName = crdName + "core"
 	}
 
-	crdKey := crdName
-	clusterName, err := genericapirequest.ClusterNameFrom(ctx)
+	var crdClusterName string
+	var crd *apiextensionsv1.CustomResourceDefinition
+	var err error
+
+	cluster, err := genericapirequest.ValidClusterFrom(ctx)
 	if err != nil {
 		responsewriters.ErrorNegotiated(
 			apierrors.NewInternalError(fmt.Errorf("error resolving resource: %v", err)),
 			Codecs, schema.GroupVersion{Group: requestInfo.APIGroup, Version: requestInfo.APIVersion}, w, req,
 		)
+		return
 	}
-	crdKey = clusters.ToClusterAwareKey(clusterName, crdKey)
-	crd, err := r.crdLister.Get(crdKey)
+
+	if cluster.Wildcard {
+		var crds []*apiextensionsv1.CustomResourceDefinition
+		crds, err = r.crdLister.List(labels.Everything())
+		if err == nil {
+			if len(crds) == 0 {
+				err = errors.NewNotFound(schema.GroupResource{Group: apiextensionsv1.SchemeGroupVersion.Group, Resource: "customresourcedefinitions"}, "")
+			} else {
+				for _, aCRD := range crds {
+					if aCRD.Name != crdName {
+						continue
+					}
+					if crd == nil {
+						crd = aCRD
+						crdClusterName = aCRD.GetClusterName()
+					} else {
+						if !equality.Semantic.DeepEqual(crd.Spec, aCRD.Spec) {
+							responsewriters.ErrorNegotiated(
+								apierrors.NewInternalError(fmt.Errorf("error resolving resource: cannot watch across logical clusters for a resource type with several distinct schemas")),
+								Codecs, schema.GroupVersion{Group: requestInfo.APIGroup, Version: requestInfo.APIVersion}, w, req,
+							)
+							return
+						}
+					}
+				}
+			}
+		}
+	} else {
+		getCRDInCluster := func(clusterName string) (*apiextensionsv1.CustomResourceDefinition, error) {
+			crdKey := clusters.ToClusterAwareKey(clusterName, crdName)
+			return r.crdLister.Get(crdKey)
+		}
+		crdClusterName = cluster.Name
+		crd, err = getCRDInCluster(crdClusterName)
+		if err != nil && errors.IsNotFound(err) && len(cluster.Parents) > 0 {
+			crd, err = getCRDInCluster(cluster.Parents[0])
+			if err == nil && crd != nil {
+				crdClusterName = cluster.Parents[0]
+			}
+		}
+	}
 	if apierrors.IsNotFound(err) {
 		if !r.hasSynced() {
 			responsewriters.ErrorNegotiated(serverStartingError(), Codecs, schema.GroupVersion{Group: requestInfo.APIGroup, Version: requestInfo.APIVersion}, w, req)
@@ -336,7 +381,7 @@ func (r *crdHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	terminating := apiextensionshelpers.IsCRDConditionTrue(crd, apiextensionsv1.Terminating)
 
-	crdInfo, err := r.getOrCreateServingInfoFor(crd.UID, crd.Name, clusterName)
+	crdInfo, err := r.getOrCreateServingInfoFor(crd.UID, crd.Name, crdClusterName)
 	if apierrors.IsNotFound(err) {
 		r.delegate.ServeHTTP(w, req)
 		return
