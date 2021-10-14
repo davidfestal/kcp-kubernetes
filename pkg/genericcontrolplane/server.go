@@ -422,7 +422,17 @@ func BuildGenericConfig(
 			case "":
 				cluster.Name = RootClusterName
 			default:
-				if !reClusterName.MatchString(clusterName) {
+				clusterNameToTest := clusterName
+				if strings.HasPrefix(clusterName, "_") && strings.HasSuffix(clusterName, "_") {
+					if requestInfo, err := c.RequestInfoResolver.NewRequestInfo(req); err == nil && requestInfo.IsResourceRequest {
+						cluster.Parents = []string{ clusterName[1 : len(clusterName)-1] }
+						clusterNameToTest = cluster.Parents[0]
+					} else {
+						clusterName = clusterName[1 : len(clusterName)-1]
+						clusterNameToTest = clusterName
+					}
+				}
+				if !reClusterName.MatchString(clusterNameToTest) {
 					http.Error(w, "Unknown cluster", http.StatusNotFound)
 					return
 				}
