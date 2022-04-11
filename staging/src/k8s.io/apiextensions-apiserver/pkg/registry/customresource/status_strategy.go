@@ -18,6 +18,7 @@ package customresource
 
 import (
 	"context"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -53,6 +54,9 @@ func (a statusStrategy) GetResetFields() map[fieldpath.APIVersion]*fieldpath.Set
 	return fields
 }
 
+func isLocationDiffSyncerAnnotation(annotationKey string) bool {
+	return strings.SplitN(annotationKey, "/", 2)[0] == "location.diff.syncer.internal.kcp.dev"
+}
 func (a statusStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Object) {
 	// update is only allowed to set status
 	newCustomResourceObject := obj.(*unstructured.Unstructured)
@@ -63,6 +67,15 @@ func (a statusStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.O
 	// track changed fields in the status update.
 	managedFields := newCustomResourceObject.GetManagedFields()
 
+	updatedAnnotations := newCustomResourceObject.GetAnnotations()
+	updatedInternalKCPAnnotations := make(map[string]string, len(updatedAnnotations))
+	for key, value := range updatedAnnotations {
+		if isLocationDiffSyncerAnnotation(key) {
+			updatedInternalKCPAnnotations[key] = value
+		}
+	}
+
+
 	// copy old object into new object
 	oldCustomResourceObject := old.(*unstructured.Unstructured)
 	// overridding the resourceVersion in metadata is safe here, we have already checked that
@@ -71,6 +84,21 @@ func (a statusStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.O
 
 	// set status
 	newCustomResourceObject.SetManagedFields(managedFields)
+	annotations := newCustomResourceObject.GetAnnotations()
+	for key := range annotations {
+		if isLocationDiffSyncerAnnotation(key) {
+			if _, exists := updatedInternalKCPAnnotations[key]; !exists {
+				delete(annotations, key)
+			}
+		}
+	}
+	if annotations == nil {
+		annotations = make(map[string]string, len(updatedInternalKCPAnnotations))
+	}
+	for key, value := range updatedInternalKCPAnnotations {
+		annotations[key] = value
+	}
+	newCustomResourceObject.SetAnnotations(annotations)
 	newCustomResource = newCustomResourceObject.UnstructuredContent()
 	if ok {
 		newCustomResource["status"] = status
